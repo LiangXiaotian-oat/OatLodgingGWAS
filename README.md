@@ -24,7 +24,7 @@ The code in this repository is open-sourced under the **MIT License**. See the [
 
 **However, if you use this code or data in your research, please cite our paper:**
 
-> **[Your Name], et al. (2025).** Multi-environment genome-wide association study identifies stable QTLs and candidate genes for lodging resistance-related traits in oat (*Avena sativa* L.). *[Journal Name]*. DOI: [Insert DOI here]
+> **Liang Xiaotian, et al. (2025).** Multi-environment genome-wide association study identifies stable QTLs and candidate genes for lodging resistance-related traits in oat (*Avena sativa* L.). *[Journal Name]*. DOI: [Insert DOI here]
 
 ## 🚀 Getting Started
 
