@@ -18,6 +18,14 @@ This repository contains the source code and analysis scripts for the research p
     * Statistical analysis and other visualizations used in the manuscript.
 * **`data/`**: Sample datasets to demonstrate the usage of the scripts.
 
+## 📝 License & Citation
+
+The code in this repository is open-sourced under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+**However, if you use this code or data in your research, please cite our paper:**
+
+> **[Your Name], et al. (2025).** Multi-environment genome-wide association study identifies stable QTLs and candidate genes for lodging resistance-related traits in oat (*Avena sativa* L.). *[Journal Name]*. DOI: [Insert DOI here]
+
 ## 🚀 Getting Started
 
 ### Prerequisites
