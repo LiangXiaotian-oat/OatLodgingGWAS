@@ -5,7 +5,8 @@
 #   across different environments/targets. It generates histograms with fitted 
 #   normal distribution curves and saves them as high-resolution images.
 #
-# Author: [Liang Xiaotian/494382219@qq.com]
+# Author: Liang Xiaotian
+# Email: 494382219@qq.com
 # Date: 2025/12/6
 # License: MIT
 # ==============================================================================
