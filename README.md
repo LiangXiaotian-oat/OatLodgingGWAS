@@ -12,33 +12,52 @@ This repository contains the source code and analysis scripts for the research p
 
 ---
 
-## 📂 Code Organization
+## 📂 Code Organization & Analysis Pipeline
 
-All analysis scripts are located in the root directory of this repository. They are categorized by their analytical function:
+All scripts are numbered according to the analysis workflow described in the manuscript. **Note:** All scripts include a built-in demo mode (`--demo` or synthetic data generation), allowing users to reproduce the pipeline without accessing the raw dataset.
 
-### 🧬 Haplotype & Association Analysis (Python)
-* **`haplotype_analysis.py`**: The core pipeline for haplotype analysis. It performs:
-    * **Haplotype Construction**: Identifies haplotype blocks from VCF files.
-    * **Statistical Testing**: Combinatorial analysis of SNPs and One-way ANOVA with Tukey's HSD post-hoc test.
-    * **Visualization**: Generates haplotype structure heatmaps, genotype distribution plots, and phenotype boxplots.
-* **`xgboost_feature_analysis.py`**: Machine learning-based feature ranking to evaluate the importance of phenotypic traits.
+### 📊 1. Phenotype Statistical Analysis
+* **`01_phenotype_stats.R`**
+    * Calculates descriptive statistics (Mean, SD, CV, Skewness, Kurtosis) for all traits across environments.
+    * Pre-processes raw data by averaging replicates.
+* **`02_correlation_visualization_PerformanceAnalytics.R`**
+    * Performs Pearson correlation analysis within single environments.
+    * Generates correlation matrices with significance levels and histograms using the `PerformanceAnalytics` package.
+* **`03_correlation_visualization_GGally.R`**
+    * Visualizes multi-environment trait correlations.
+    * Uses `GGally` to create pairwise plots colored by environment to assess trait stability.
+* **`05_normality_checks_visualization.R`**
+    * Performs Shapiro-Wilk normality tests.
+    * Generates high-resolution histograms with fitted normal distribution curves for quality control.
 
-### 📊 GWAS & Statistical Visualization (R)
-* **`gapit_gwas_demo.R`**: A standardized workflow for running GWAS using FarmCPU and BLINK models via the `GAPIT` package.
-* **`manhattan_qq_plot_demo.R`**: Generates publication-quality Manhattan and QQ plots using `CMplot`.
-* **`correlation_analysis_demo.R`**: Performs correlation matrix analysis and visualization using `GGally`.
-* **`heritability_blup_analysis.R`**: Calculates Broad-Sense Heritability ($H^2$) and BLUP values using Linear Mixed Models (`lme4`).
-* **`normality_check_demo.R`**: Checks data normality and plots distribution histograms.
+### 🤖 2. Machine Learning & Heritability
+* **`04_xgboost_feature_importance.py`**
+    * **Key Script:** Implements the XGBoost regression model described in Section 2.3.2.
+    * Ranks phenotypic traits by their "Importance Score" (Gain) regarding Lodging Resistance.
+    * Includes logic for grouping features (e.g., Morphological vs. Mechanical traits).
+* **`06_Heritability_BLUP_Calculation.R`**
+    * Fits Linear Mixed Models (LMM) using `lme4`.
+    * Calculates Best Linear Unbiased Predictions (**BLUPs**) for GWAS input.
+    * Estimates Broad-sense Heritability ($H^2$) using variance components.
 
-#### R Scripts (Visualization & Stats)
-The R scripts are designed to be modular. You can run them in RStudio or via the command line (`Rscript script_name.R`).
+### 🧬 3. Genome-Wide Association Study (GWAS)
+* **`07_gapit_gwas.R`**
+    * **Core Analysis:** Runs the GWAS pipeline using **GAPIT 3**.
+    * Implements **FarmCPU** and **BLINK** models as specified in Section 2.4.
+    * Handles synthetic HapMap genotype data generation for demonstration.
+* **`08_Manhattan_QQ_Plots.R`**
+    * Visualizes GWAS results using `CMplot`.
+    * Generates publication-quality Rectangular and Circular Manhattan plots.
+    * Applies the dual-threshold strategy (Significant: $P < 10^{-4}$, Suggestive: $P < 10^{-3}$).
 
-| Module | Required Input Columns |
-|--------|------------------------|
-| **GWAS Plots** | `SNP`, `Chromosome`, `Position`, `P.value` |
-| **Correlation/Normality** | Matrix: rows = samples, cols = phenotypic traits |
-| **Heritability** | `Line`, `Env`, `Rep`, `Trait` |
-
+### 🔬 4. Candidate Gene & Haplotype Analysis
+* **`09_SNP_genotype_visualization.py`**
+    * Visualizes genotype frequency distributions for specific SNPs.
+    * Generates stacked bar charts to inspect allele counts.
+* **`10_haplotype_verification.py`**
+    * **Validation Script:** Performs the haplotype analysis described in Section 2.5.2.
+    * Parses VCF files to identify haplotype blocks.
+    * Conducts **ANOVA** and **Tukey’s HSD test** to verify phenotypic differences between haplotypes.
 ---
 
 ## 📝 Data Availability
