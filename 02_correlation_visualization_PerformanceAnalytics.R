@@ -1,17 +1,17 @@
 # ==============================================================================
-# Project: Comprehensive Correlation Analysis & Visualization Pipeline
+# Script Name: 02_correlation_visualization_PerformanceAnalytics.R
 # Description: 
-#   This script demonstrates how to perform correlation analysis using the Hmisc package.
-#   It calculates Pearson/Spearman correlation coefficients and p-values, flattens the 
-#   correlation matrix into a readable table, and visualizes the results using 
-#   corrplot and PerformanceAnalytics.
+#    This script performs comprehensive correlation analysis.
+#    1. Calculates Pearson correlation coefficients (r) and p-values using Hmisc.
+#    2. Exports a flattened summary table of correlations.
+#    3. Visualizes correlations using 'corrplot' (heatmap) and 'PerformanceAnalytics'.
 #
-#   Includes synthetic data generation for privacy protection and reproducibility.
+#    Includes synthetic data generation for privacy protection and reproducibility.
 #
-# Author: Liang Xiaotian
-# Email: 494382219@qq.com
-# Date: 2025-12-06
-# License: MIT
+# Author:      Liang Xiaotian
+# Email:       494382219@qq.com
+# Date:        2025-12-06
+# License:     MIT
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -21,38 +21,41 @@
 # List of required packages
 required_packages <- c("Hmisc", "corrplot", "PerformanceAnalytics")
 
-# Function to check and install missing packages automatically
-install_if_missing <- function(packages) {
-  new_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
-  if (length(new_packages)) {
-    message("Installing missing packages: ", paste(new_packages, collapse = ", "))
-    install.packages(new_packages)
+# Function to check and install packages automatically (Consistent with File 01)
+check_install_packages <- function(pkgs) {
+  for (pkg in pkgs) {
+    if (!require(pkg, character.only = TRUE)) {
+      message(paste0("[Setup] Package '", pkg, "' not found. Installing..."))
+      install.packages(pkg, dependencies = TRUE)
+      library(pkg, character.only = TRUE)
+    } else {
+      message(paste0("[Setup] Package '", pkg, "' is loaded."))
+    }
   }
-  invisible(sapply(packages, library, character.only = TRUE))
 }
 
 # Load packages
-install_if_missing(required_packages)
+check_install_packages(required_packages)
 
 # Create output directory
-output_dir <- "Correlation_Analysis_Output"
+output_dir <- "results" # Consistent with File 01
 if (!dir.exists(output_dir)) {
-  dir.create(output_dir)
+  dir.create(output_dir, recursive = TRUE)
 }
 
 # ------------------------------------------------------------------------------
 # Section 2: Data Preparation (Synthetic Data)
-# NOTE: In real analysis, replace this section with: mydata <- read.csv("your_data.csv")
 # ------------------------------------------------------------------------------
 
-message("Generating synthetic data for correlation analysis...")
+message("\n[Data] Generating synthetic data for correlation analysis...")
 
-# Set seed for reproducibility
-set.seed(123)
+# Set seed for reproducibility (Consistent with File 01)
+set.seed(2025)
 
 # Simulate a dataset with 100 samples and 6 variables (Traits)
 n_samples <- 100
 mydata <- data.frame(
+  SampleID = paste0("Sample_", 1:n_samples), # Added ID column to test robustness
   Trait_A = rnorm(n_samples, mean = 50, sd = 10),
   Trait_B = rnorm(n_samples, mean = 20, sd = 5),
   Trait_C = runif(n_samples, 0, 100),
@@ -74,20 +77,16 @@ print(head(mydata))
 # Section 3: Correlation Calculation (Hmisc)
 # ------------------------------------------------------------------------------
 
-message("Calculating correlation matrix and p-values...")
+message("\n[Analysis] Calculating correlation matrix and p-values...")
+
+# IMPORTANT: Select ONLY numeric columns for correlation analysis
+# This prevents errors if your data has 'SampleID' or 'Env' columns
+numeric_data <- Filter(is.numeric, mydata)
 
 # Use rcorr from Hmisc to get both r and p values
-# Input must be a matrix
-res <- rcorr(as.matrix(mydata), type = "pearson") # Options: "pearson", "spearman"
-
-# Extract correlation coefficients (r) and p-values (P)
-cor_matrix <- res$r
-p_matrix <- res$P
+res <- rcorr(as.matrix(numeric_data), type = "pearson") 
 
 # Function to flatten the correlation matrix into a table format
-# Arguments:
-#   cormat: matrix of the correlation coefficients
-#   pmat: matrix of the correlation p-values
 flattenCorrMatrix <- function(cormat, pmat) {
   ut <- upper.tri(cormat)
   data.frame(
@@ -102,26 +101,24 @@ flattenCorrMatrix <- function(cormat, pmat) {
 flat_corr_data <- flattenCorrMatrix(res$r, res$P)
 
 # View top 10 significant correlations
-print("Top significant correlations:")
+message("Top 10 significant correlations:")
 print(head(flat_corr_data[order(flat_corr_data$p), ], 10))
 
 # Save flattened matrix to CSV
-write.csv(flat_corr_data, file = paste0(output_dir, "/Correlation_Summary_Table.csv"), row.names = FALSE)
+write.csv(flat_corr_data, file = file.path(output_dir, "02_Correlation_Summary_Table.csv"), row.names = FALSE)
 
 # ------------------------------------------------------------------------------
 # Section 4: Visualization - Method 1: corrplot
 # ------------------------------------------------------------------------------
 
-message("Generating visualization: corrplot...")
+message("\n[Plotting] Generating visualization: corrplot...")
 
-# Define output filename
-plot1_path <- paste0(output_dir, "/Corrplot_Visualization.png")
+plot1_path <- file.path(output_dir, "02_Corrplot_Visualization.png")
 
 # Save plot to PNG
 png(filename = plot1_path, width = 2000, height = 2000, res = 300)
 
 # Plot 1: Correlation matrix with significance levels
-# Insignificant correlations (p > 0.01) are left blank
 corrplot(res$r, 
          type = "upper", 
          order = "hclust", 
@@ -130,29 +127,27 @@ corrplot(res$r,
          insig = "blank", 
          tl.col = "black", 
          tl.srt = 45,
-         title = "Correlation Matrix (Insignificant Hidden)",
-         mar = c(0,0,2,0)) # Adjust margin for title
+         title = "Correlation Matrix (p < 0.01)",
+         mar = c(0,0,2,0))
 
 dev.off()
-message("Saved plot to: ", plot1_path)
+message(paste("Saved plot to:", plot1_path))
 
 # ------------------------------------------------------------------------------
 # Section 5: Visualization - Method 2: PerformanceAnalytics
 # ------------------------------------------------------------------------------
 
-message("Generating visualization: PerformanceAnalytics chart...")
+message("\n[Plotting] Generating visualization: PerformanceAnalytics chart...")
 
-# Define output filename
-plot2_path <- paste0(output_dir, "/PerformanceAnalytics_Chart.png")
+plot2_path <- file.path(output_dir, "02_PerformanceAnalytics_Chart.png")
 
 # Save plot to PNG
 png(filename = plot2_path, width = 2400, height = 2400, res = 300)
 
 # Plot 2: Comprehensive correlation chart
-# Includes histograms (diagonal), scatter plots (lower), and correlation values (upper)
-chart.Correlation(mydata, histogram = TRUE, pch = 19)
+chart.Correlation(numeric_data, histogram = TRUE, pch = 19)
 
 dev.off()
-message("Saved plot to: ", plot2_path)
+message(paste("Saved plot to:", plot2_path))
 
-message("Analysis Complete. Check the output folder.")
+message("\n[Success] File 02 Analysis Complete.")
