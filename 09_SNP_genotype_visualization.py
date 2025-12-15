@@ -2,98 +2,117 @@
 # -*- coding: utf-8 -*-
 
 """
-SNP Genotype Visualization Script
----------------------------
-Copyright (c) 2025 Liang Xiaotian <494382219@qq.com>
---------------------------------------------------
-Description: 
-    This script reads SNP genotype data from a local file (Excel/CSV) 
-    and generates a grouped bar chart visualization.
-    It automatically handles dependencies and saves outputs to a specific folder.
+Script Name: 09_SNP_genotype_visualization.py
+Description:
+    This script visualizes SNP genotype distributions (Stacked/Grouped Bar Charts).
+    It is designed to check the allele frequency or genotype counts for specific SNPs.
+    
+    Features:
+    - Auto-generates synthetic data if input file is missing (Demo Mode).
+    - Saves publication-quality figures (PNG & PDF) to standardized output dir.
+    - Robust font handling for different operating systems.
 
-Usage:
-    Ensure your data file (e.g., 'snp_data.xlsx') is in the same directory.
-    Run the script: python snp_visualization.py
-
-Author: Liang Xiaotian
-Email: 494382219@qq.com
-Date: 2025/12/09
-License: MIT
+Author:      Liang Xiaotian
+Email:       494382219@qq.com
+Date:        2025/12/09
+License:     MIT
 """
 
 import os
 import sys
 import subprocess
-
-# ==========================================
-# 1. Dependency Management & Auto-Install
-# ==========================================
-def install_package(package):
-    """Install a package using pip if import fails."""
-    try:
-        print(f"Installing missing package: {package}...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-    except subprocess.CalledProcessError:
-        print(f"Error: Failed to install {package}. Please install it manually.")
-        sys.exit(1)
-
-# List of required packages
-required_packages = {
-    'pandas': 'pandas',
-    'matplotlib': 'matplotlib',
-    'seaborn': 'seaborn',
-    'openpyxl': 'openpyxl' # Required for reading Excel files
-}
-
-# Check and import packages dynamically
-for lib_name, pip_name in required_packages.items():
-    try:
-        __import__(lib_name)
-    except ImportError:
-        install_package(pip_name)
-
-# Safe imports after check
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 # ==========================================
-# 2. Configuration (User Inputs)
+# 1. Dependency Management
+# ==========================================
+def install_package(package):
+    """Install a package using pip if import fails."""
+    try:
+        print(f"[Setup] Installing missing package: {package}...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
+    except subprocess.CalledProcessError:
+        print(f"[Error] Failed to install {package}. Please install manually.")
+
+# Check required packages
+required_packages = ['pandas', 'matplotlib', 'seaborn', 'openpyxl']
+for lib in required_packages:
+    try:
+        __import__(lib)
+    except ImportError:
+        install_package(lib)
+
+# ==========================================
+# 2. Configuration
 # ==========================================
 
 # File Settings
-# INPUT_FILE: The name of your local Excel or CSV file.
-INPUT_FILE = "single_snp_分组柱状图.xlsx" 
+# If this file exists, it will be loaded. Otherwise, synthetic data is generated.
+INPUT_FILE = "single_snp_data.xlsx" 
 
-# Output Settings
-OUTPUT_DIR = "results"
-FIG_SIZE = (12, 7)
+# Output Settings (Standardized Project Structure)
+OUTPUT_DIR = os.path.join("results", "09_SNP_Genotype_Vis")
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
+
+# Plot Settings
+FIG_SIZE = (10, 6)
 DPI_SETTING = 300
 
-# Font Settings
-# Try to use 'Arial' or standard sans-serif
-FONT_NAME = 'Arial' 
+# Font Settings (Robust Fallback logic)
+# Tries standard fonts to avoid errors on Linux/Servers
+try:
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = ['Arial', 'DejaVu Sans', 'Liberation Sans']
+except Exception:
+    pass
 
-# Color Settings (Academic Style)
+# Color Settings (Standard Genotype Colors)
 COLOR_PALETTE = {
-    "A": "#D6221E",  # Red
-    "T": "#3778AD",  # Blue
-    "C": "#4EA74A",  # Green
-    "G": "#EF7C1B",  # Orange/Yellow
-    "N": "gray"      # Missing/Null
+    "AA": "#D6221E",  # Red
+    "TT": "#3778AD",  # Blue
+    "CC": "#4EA74A",  # Green
+    "GG": "#EF7C1B",  # Orange
+    "AT": "#9b59b6",  # Purple (Het)
+    "NN": "gray"      # Missing
 }
 
 # ==========================================
-# 3. Data Loading Logic
+# 3. Data Loading & Simulation logic
 # ==========================================
+
+def generate_synthetic_data():
+    """Generates dummy SNP genotype data for demonstration."""
+    print("[Data] Input file not found. Generating synthetic SNP data...")
+    
+    # Simulate 5 SNPs
+    snps = [f"SNP_{i}" for i in range(1, 6)]
+    genotypes = ["AA", "TT", "AT", "CC", "GG"]
+    
+    data = []
+    for snp in snps:
+        # Generate random counts for genotypes
+        # Simulate different distributions for each SNP
+        counts = np.random.randint(10, 100, size=len(genotypes))
+        for gt, count in zip(genotypes, counts):
+            data.append({"SNP": snp, "Genotype": gt, "Count": count})
+            
+    df = pd.DataFrame(data)
+    
+    # Save dummy data for user reference (Optional)
+    dummy_path = os.path.join(OUTPUT_DIR, "demo_snp_data.csv")
+    df.to_csv(dummy_path, index=False)
+    print(f"[Data] Synthetic data saved to: {dummy_path}")
+    
+    return df
+
 def load_dataset(file_path):
-    """
-    Loads data from Excel or CSV file.
-    """
+    """Loads data from file or generates synthetic data if missing."""
     if not os.path.exists(file_path):
-        print(f"[Error] File not found: {file_path}")
-        print("Please ensure the data file is in the current directory.")
-        sys.exit(1)
+        return generate_synthetic_data()
 
     try:
         if file_path.endswith('.csv'):
@@ -104,7 +123,7 @@ def load_dataset(file_path):
             print("[Error] Unsupported file format. Please use .csv or .xlsx")
             sys.exit(1)
         
-        print(f"Successfully loaded data from: {file_path}")
+        print(f"[Data] Successfully loaded: {file_path}")
         return df
     except Exception as e:
         print(f"[Error] Failed to read file: {e}")
@@ -113,25 +132,22 @@ def load_dataset(file_path):
 # ==========================================
 # 4. Plotting Function
 # ==========================================
-def plot_snp_distribution(df, output_folder):
-    """
-    Plots the grouped bar chart and saves it to the output folder.
-    """
-    # Create folder if not exists
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-        print(f"Created output directory: {output_folder}")
 
-    # Set up the plot style
+def plot_snp_distribution(df, output_folder):
+    """Plots grouped bar chart for SNP genotypes."""
+    
+    # Validation: Ensure columns exist
+    required_cols = {'SNP', 'Genotype', 'Count'}
+    if not required_cols.issubset(df.columns):
+        print(f"[Error] Dataframe missing required columns: {required_cols}")
+        print(f"Found: {df.columns.tolist()}")
+        return
+
     sns.set_style("ticks")
     plt.figure(figsize=FIG_SIZE)
     
-    # Font configuration
-    plt.rcParams['font.family'] = FONT_NAME
-    plt.rcParams['font.size'] = 12
-
-    # Draw the barplot
     try:
+        # Draw Barplot
         ax = sns.barplot(
             data=df,
             x="SNP",
@@ -141,56 +157,49 @@ def plot_snp_distribution(df, output_folder):
             edgecolor="black",
             linewidth=1.2
         )
-    except ValueError as e:
-        print(f"[Error] Plotting failed. Check column names (SNP, Count, Genotype). Details: {e}")
-        sys.exit(1)
+    except Exception as e:
+        print(f"[Error] Plotting failed: {e}")
+        return
 
-    # Labels and Title
-    plt.title("Single SNP Genotype Counts", fontsize=16, fontweight='bold', pad=20)
-    plt.xlabel("SNP Position", fontsize=14, fontweight='bold')
+    # Styling
+    plt.title("Genotype Distribution per SNP", fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel("SNP Marker", fontsize=14, fontweight='bold')
     plt.ylabel("Sample Count", fontsize=14, fontweight='bold')
-
-    # Adjust ticks
-    plt.xticks(rotation=45, ha="right")
-
-    # Legend optimization (Outside the plot area)
-    plt.legend(title="Genotype", title_fontsize='12', 
-               bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
-
-    # Add value labels on top of bars
+    
+    # Legend
+    plt.legend(title="Genotype", title_fontsize='12', bbox_to_anchor=(1.02, 1), loc='upper left')
+    
+    # Add value labels on bars
     for container in ax.containers:
-        ax.bar_label(container, padding=2, fontsize=10)
+        ax.bar_label(container, padding=3, fontsize=10)
 
     plt.tight_layout()
 
-    # Save logic
-    # 1. Save as PNG (Raster)
-    png_path = os.path.join(output_folder, "SNP_Genotype_Analysis.png")
+    # Save outputs (Vector & Raster)
+    png_path = os.path.join(output_folder, "09_SNP_Genotype_Plot.png")
+    pdf_path = os.path.join(output_folder, "09_SNP_Genotype_Plot.pdf")
+    
     plt.savefig(png_path, dpi=DPI_SETTING, bbox_inches='tight')
-    
-    # 2. Save as PDF (Vector)
-    pdf_path = os.path.join(output_folder, "SNP_Genotype_Analysis.pdf")
     plt.savefig(pdf_path, format='pdf', bbox_inches='tight')
-
-    print(f"Success! Figures saved to:\n - {png_path}\n - {pdf_path}")
     
-    # Display plot
-    plt.show()
+    print(f"[Output] Plots saved to:\n  - {png_path}\n  - {pdf_path}")
+    # plt.show() # Uncomment for interactive mode
 
 # ==========================================
 # 5. Main Execution
 # ==========================================
+
 if __name__ == "__main__":
-    print("--- Starting SNP Visualization Script ---")
+    print("--- Starting SNP Visualization Script (09) ---")
     
-    # 1. Load Data
+    # 1. Load or Generate Data
     df = load_dataset(INPUT_FILE)
     
-    # 2. Preview Data
-    print("Data Preview (First 5 rows):")
+    # 2. Preview
+    print("Data Preview (Head):")
     print(df.head())
     
-    # 3. Generate Visualization
+    # 3. Plot
     plot_snp_distribution(df, OUTPUT_DIR)
     
     print("--- Script Finished Successfully ---")
