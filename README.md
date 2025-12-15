@@ -48,7 +48,6 @@ All scripts are numbered according to the analysis workflow described in the man
 * **`08_Manhattan_QQ_Plots.R`**
     * Visualizes GWAS results using `CMplot`.
     * Generates publication-quality Rectangular and Circular Manhattan plots.
-    * Applies the dual-threshold strategy (Significant: $P < 10^{-4}$, Suggestive: $P < 10^{-3}$).
 
 ### 🔬 4. Candidate Gene & Haplotype Analysis
 * **`09_SNP_genotype_visualization.py`**
