@@ -1,15 +1,17 @@
 # ==============================================================================
-# Project: Heritability (H²) and BLUP Calculation Pipeline
+# Script Name: 06_Heritability_BLUP_Calculation.R
 # Description: 
-#   This script fits Linear Mixed Models (LMM) to phenotypic data to calculate 
-#   Best Linear Unbiased Predictions (BLUPs) and Broad-Sense Heritability (H²).
-#   It performs model comparison (BIC) and Likelihood Ratio Tests (LRT) for 
-#   variance components. Includes synthetic data generation for reproducibility.
+#    This script fits Linear Mixed Models (LMM) to phenotypic data to calculate 
+#    Best Linear Unbiased Predictions (BLUPs) and Broad-Sense Heritability (H²).
+#    It performs model comparison (BIC) and Likelihood Ratio Tests (LRT) for 
+#    variance components to ensure the most appropriate model is selected.
 #
-# Author: Liang Xiaotian
-# Email: 494382219@qq.com
-# Date: 2025-12-06
-# License: MIT
+#    Includes synthetic data generation for privacy protection and reproducibility.
+#
+# Author:      Liang Xiaotian
+# Email:       494382219@qq.com
+# Date:        2025-12-06
+# License:     MIT
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -19,34 +21,36 @@
 # List of required packages
 required_packages <- c("lme4", "emmeans", "data.table", "tidyverse", "writexl")
 
-# Function to check and install missing packages automatically
-install_if_missing <- function(packages) {
-  new_packages <- packages[!(packages %in% installed.packages()[, "Package"])]
-  if (length(new_packages)) {
-    message("Installing missing packages: ", paste(new_packages, collapse = ", "))
-    install.packages(new_packages)
+# Function to check and install packages automatically
+check_install_packages <- function(pkgs) {
+  for (pkg in pkgs) {
+    if (!require(pkg, character.only = TRUE)) {
+      message(paste0("[Setup] Package '", pkg, "' not found. Installing..."))
+      install.packages(pkg, dependencies = TRUE)
+      library(pkg, character.only = TRUE)
+    } else {
+      message(paste0("[Setup] Package '", pkg, "' is loaded."))
+    }
   }
-  invisible(sapply(packages, library, character.only = TRUE))
 }
 
 # Load packages
-install_if_missing(required_packages)
+check_install_packages(required_packages)
 
 # Create output directory
-output_dir <- "Heritability_BLUP_Output"
+output_dir <- file.path("results", "06_BLUP_Heritability")
 if (!dir.exists(output_dir)) {
-  dir.create(output_dir)
+  dir.create(output_dir, recursive = TRUE)
 }
 
 # ------------------------------------------------------------------------------
 # Section 2: Data Simulation (Privacy Protection)
-# NOTE: In real analysis, replace this section with read.csv("your_data.csv")
 # ------------------------------------------------------------------------------
 
-message("Generating synthetic phenotypic data...")
+message("\n[Data] Generating synthetic phenotypic data...")
 
-# Set seed for reproducibility
-set.seed(123)
+# Set seed for reproducibility (Consistent with project)
+set.seed(2025)
 
 # 2.1 Simulation Parameters
 n_lines <- 100  # Number of genotypes
@@ -79,7 +83,8 @@ for (t in traits) {
   names(eff_loc) <- paste0("Loc_", 1:n_locs)
   
   # Construct phenotype
-  dat[[t]] <- 50 + # Intercept
+  # Value = Intercept + G + Y + L + Error
+  dat[[t]] <- 50 + 
     eff_line[dat$Line] +
     eff_year[dat$Year] +
     eff_loc[dat$Loc] +
@@ -94,7 +99,7 @@ dat[cols_to_factor] <- lapply(dat[cols_to_factor], as.factor)
 # Section 3: Model Fitting and Analysis
 # ------------------------------------------------------------------------------
 
-message("Starting BLUP and Heritability analysis...")
+message("\n[Analysis] Starting BLUP and Heritability analysis...")
 
 # Initialize storage lists
 best_blup_list <- list()
@@ -102,7 +107,7 @@ model_compare_list <- list()
 heritability_list <- list()
 
 for (trait in traits) {
-  message("Processing trait: ", trait)
+  message(paste0("  -> Processing trait: ", trait))
   
   # 3.1 Define Linear Mixed Models (LMM)
   # Model 1: Line + Year random
@@ -129,13 +134,13 @@ for (trait in traits) {
   model_compare <- data.frame(Model = model_names, BIC = bic_values)
   model_compare_list[[trait]] <- model_compare
   
-  # Select Best Model
+  # Select Best Model based on lowest BIC
   best_idx <- which.min(bic_values)
   best_model <- models_list[[best_idx]]
   best_model_name <- model_names[best_idx]
   
   # 3.3 Likelihood Ratio Test (LRT) for Genetic Variance
-  # Null model: Remove (1 | Line) from best model
+  # Null model: Remove (1 | Line) from the best model to test genetic significance
   best_formula <- formula(best_model)
   null_formula <- update(best_formula, . ~ . - (1 | Line))
   null_model <- lmer(null_formula, data = dat, control = lmerControl(optimizer = "bobyqa"))
@@ -172,6 +177,8 @@ for (trait in traits) {
   
   # Phenotypic Variance (Vp)
   # Formula: Vg + V_y/y + V_l/l + V_yl/yl + Ve/ylr
+  # Note: Denominators depend on the experimental design (mean basis vs plot basis)
+  # Here we use mean-basis heritability formula typically used in breeding
   Vp <- sigma2_G + (sigma2_Year/n_y) + (sigma2_Loc/n_l) + 
         (sigma2_YearLoc/(n_y*n_l)) + (sigma2_e/(n_y*n_l*n_r))
   
@@ -182,9 +189,6 @@ for (trait in traits) {
     Trait = trait,
     Best_Model = best_model_name,
     Sigma2_G = round(sigma2_G, 4),
-    Sigma2_Year = round(sigma2_Year, 4),
-    Sigma2_Loc = round(sigma2_Loc, 4),
-    Sigma2_YearLoc = round(sigma2_YearLoc, 4),
     Sigma2_Residual = round(sigma2_e, 4),
     Total_Vp = round(Vp, 4),
     H2 = round(H2, 3),
@@ -206,6 +210,8 @@ for (trait in traits) {
 # Section 4: Result Compilation and Export
 # ------------------------------------------------------------------------------
 
+message("\n[Output] Compiling results...")
+
 # 4.1 Combine BLUPs (Wide Format)
 # Start with the first trait's BLUPs
 blup_combined <- best_blup_list[[1]] %>% select(Line, BLUP)
@@ -224,7 +230,7 @@ model_comparison_all <- bind_rows(model_compare_list, .id = "Trait")
 heritability_all <- bind_rows(heritability_list)
 
 # 4.3 Export to Excel
-output_file <- paste0(output_dir, "/BLUP_Heritability_Results.xlsx")
+output_file <- file.path(output_dir, "06_BLUP_Heritability_Results.xlsx")
 
 write_xlsx(
   list(
@@ -235,5 +241,4 @@ write_xlsx(
   path = output_file
 )
 
-message("Analysis Complete.")
-message("Results saved to: ", output_file)
+message(paste("[Success] Analysis Complete. Results saved to:", output_file))
