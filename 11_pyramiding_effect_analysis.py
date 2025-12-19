@@ -2,25 +2,25 @@
 # -*- coding: utf-8 -*-
 
 """
-Script Name: 10_haplotype_verification.py
+Script Name: 11_pyramiding_effect_analysis.py
 Description:
-    This script performs comprehensive haplotype validation and pyramiding effect analysis 
-    for candidate genes identified in GWAS/QTL studies.
-    
-    Workflow:
-    1. VCF & Phenotype Parsing: Merges genotypic data (VCF) with phenotypic data.
-    2. Haplotype Construction: Groups samples based on SNP combinations.
-    3. Statistical Testing: Performs T-test/ANOVA to verify haplotype differences.
-    4. Visualization: 
-       - Boxplots with significance levels (distribution check).
-       - Single-locus regression (additive effect check).
-       - Pyramiding effect regression (cumulative effect of superior alleles).
-    5. Output: Generates publication-ready figures (PNG/PDF) and summary tables.
+    This script evaluates the cumulative effect (pyramiding effect) of superior alleles 
+    across multiple candidate loci identified in GWAS.
 
-    Features:
-    - Automatically handles trait direction (lower/higher is better).
-    - Calculates superior allele counts dynamically.
-    - Outputs dual-format plots (High-res PNG + Vector PDF).
+    Scientific Goals:
+    1. Identification: Determine the "Superior Allele" for each SNP based on trait direction 
+       (e.g., lower is better for disease index, higher is better for yield).
+    2. Quantification: Calculate the 'Pyramiding Score' (count of superior alleles) for each accession.
+    3. Validation: Perform linear regression to verify the additive effect of stacking these alleles.
+
+    Workflow:
+    1. Data Integration: Merge VCF genotypes with multi-environment phenotype data.
+    2. Directionality Check: Auto-detect superior alleles (Ref vs. Alt) per trait.
+    3. Visualization:
+       - Comparative Boxplots: Phenotypic distribution of haplotypes.
+       - Single-Locus Regression: Additive effect of individual SNPs.
+       - Pyramiding Regression: Linear relationship between Superior Allele Count (0-N) and Phenotype.
+    4. Output: High-resolution plots (PNG/PDF) and detailed statistical tables.
 
 Author:      Liang Xiaotian
 Email:       494382219@qq.com
@@ -51,20 +51,19 @@ CONFIG = {
     # File Paths
     "VCF_FOLDER": ".",
     "PHENOTYPE_FILE": "phe386.csv",
-    "OUTPUT_DIR": "10_Haplotype_Verification_Results",
+    "OUTPUT_DIR": "11_Pyramiding_Analysis_Results",
 
     # Trait Definitions
     "TRAIT_GROUPS": ["LS", "TIL", "TID", "TIBR", "TIPS", "TIWT"],
     
-    # Define traits where LOWER values are better (e.g., Disease score, Heading date)
+    # Traits where LOWER values indicate better performance (Superior Allele logic)
     "LOWER_IS_BETTER_TRAITS": ["LS", "TIL"],
 
-    # Environment/Location Prefixes (Order determines plot order)
+    # Environment/Location Prefixes
     "ENV_LIST": ["24WJ", "24BC", "25WJ", "25BC", "25CZ"],
 
-    # Target SNPs Configuration
-    # Key: Label to show on plot (Keep it short)
-    # Value: {'file': VCF filename, 'pos': List of positions}
+    # Candidate SNPs for Pyramiding
+    # Structure: "Label_on_Plot": {"file": "VCF_Name", "pos": [Position]}
     "TARGET_SNPS": {
         "S1C_329788453": {"file": "AVESA.00400a.r2.1Cg0002078", "pos": [329788453]},
         "S2D_5458489":   {"file": "AVESA.00400a.r2.2Dg0000076", "pos": [5458489]},
@@ -79,36 +78,35 @@ CONFIG = {
 # ==========================================
 
 def save_plot_dual_formats(filename_base, save_dir):
-    """Saves the current matplotlib figure in both PNG and PDF formats."""
+    """Saves the current matplotlib figure in both PNG (High-Res) and PDF (Vector) formats."""
     png_path = os.path.join(save_dir, f"{filename_base}.png")
     plt.savefig(png_path, dpi=300, bbox_inches='tight')
     
     pdf_path = os.path.join(save_dir, f"{filename_base}.pdf")
     plt.savefig(pdf_path, bbox_inches='tight')
-    print(f"   [SAVED] {filename_base} (.png & .pdf)")
+    print(f"   [SAVED PLOT] {filename_base}")
 
 def load_phenotype(file_path):
-    """Loads phenotype data from CSV or TSV."""
+    """Loads phenotype data, supporting both CSV and TSV formats."""
     print(f"[INFO] Loading phenotype file: {file_path}")
     try:
         df = pd.read_csv(file_path)
-        # Auto-detect TSV if CSV parsing results in 1 column
         if df.shape[1] < 2: 
             df = pd.read_csv(file_path, sep='\t')
     except Exception as e:
         print(f"[ERROR] Failed to load phenotype file: {e}")
         return None
     
-    # Standardize SampleID column
+    # Standardize first column to 'SampleID'
     df.rename(columns={df.columns[0]: 'SampleID'}, inplace=True)
     df['SampleID'] = df['SampleID'].astype(str)
     return df
 
 def get_snp_data_from_vcfs(vcf_folder, target_snps_config):
-    """Parses VCF files to extract specific SNP genotypes."""
+    """Parses VCF files to extract genotypes for target loci."""
     all_snp_data = []
     
-    # Map filenames to requested SNPs to minimize file opening
+    # Optimize file access: Group targets by filename
     file_map = {}
     for label, info in target_snps_config.items():
         fname = info['file']
@@ -141,7 +139,6 @@ def get_snp_data_from_vcfs(vcf_folder, target_snps_config):
                     if pos in pos_list:
                         ref = parts[3]
                         alts = parts[4].split(',')
-                        # Map allele indices to bases (0->Ref, 1->Alt1)
                         alleles_map = {0: ref}
                         for idx, alt in enumerate(alts):
                             alleles_map[idx + 1] = alt
@@ -159,7 +156,7 @@ def get_snp_data_from_vcfs(vcf_folder, target_snps_config):
                             numeric_val = 0
                             valid = True
                             
-                            # Parse GT field (e.g., 0/1, 1/1)
+                            # Parse Genotype (e.g., 0/0, 0/1)
                             for val in gt_val:
                                 if val == '.': 
                                     bases.append('N')
@@ -173,13 +170,10 @@ def get_snp_data_from_vcfs(vcf_folder, target_snps_config):
                                         bases.append('N')
                                         valid = False
                             
-                            if 'N' in bases: continue # Skip missing data
+                            if 'N' in bases: continue
                             
                             unique_bases = sorted(list(set(bases)))
-                            if len(unique_bases) == 1:
-                                hap = unique_bases[0]
-                            else:
-                                hap = '/'.join(unique_bases)
+                            hap = unique_bases[0] if len(unique_bases) == 1 else '/'.join(unique_bases)
                             
                             all_snp_data.append({
                                 'SampleID': sample_id,
@@ -191,7 +185,7 @@ def get_snp_data_from_vcfs(vcf_folder, target_snps_config):
     return pd.DataFrame(all_snp_data)
 
 def reshape_phenotype(pheno_df, trait_groups, env_list):
-    """Reshapes wide phenotype data into long format based on trait/env."""
+    """Reshapes phenotype data from wide to long format."""
     melted_data = []
     value_cols = [c for c in pheno_df.columns if c != 'SampleID']
     
@@ -214,24 +208,24 @@ def reshape_phenotype(pheno_df, trait_groups, env_list):
     return pd.concat(melted_data, ignore_index=True)
 
 # ==========================================
-#           Calculation Logic
+#           Scoring & Logic
 # ==========================================
 
 def calculate_superior_allele_count_single(snp_df, trait):
     """
-    Standardizes allele count to 0 or 1 based on trait direction.
-    1 indicates the superior allele.
+    Standardizes single SNP allele count to 0 or 1.
+    1 represents the Superior Allele based on trait direction.
     """
     group_0 = snp_df[snp_df['Allele_Count'] == 0]['Value']
     group_2 = snp_df[snp_df['Allele_Count'] == 2]['Value']
     
     if len(group_0) == 0 or len(group_2) == 0:
-        return snp_df['Allele_Count'] / 2 # Default fallback
+        return snp_df['Allele_Count'] / 2 # Fallback
     
     mean_0 = group_0.mean()
     mean_2 = group_2.mean()
     
-    # Determine which allele is superior
+    # Check direction preference
     is_lower_better = trait in CONFIG["LOWER_IS_BETTER_TRAITS"]
     
     if is_lower_better:
@@ -240,16 +234,16 @@ def calculate_superior_allele_count_single(snp_df, trait):
         alt_is_superior = mean_2 > mean_0
         
     if alt_is_superior:
-        # Alt (2) is better -> Map to 1
+        # Alt (2) is superior -> map to 1
         return snp_df['Allele_Count'] / 2
     else:
-        # Ref (0) is better -> Map to 1
+        # Ref (0) is superior -> map to 1
         return 1 - (snp_df['Allele_Count'] / 2)
 
 def calculate_pyramiding_score_total(df_trait_env, trait):
     """
-    Calculates the total number of superior alleles across all SNPs for each sample.
-    Also preserves specific haplotypes for the output table.
+    Calculates the cumulative Pyramiding Score (0 to N) for each sample.
+    Also extracts specific haplotype bases for the summary table.
     """
     snp_list = df_trait_env['SNP_Name'].unique()
     scores = []
@@ -263,7 +257,7 @@ def calculate_pyramiding_score_total(df_trait_env, trait):
         
         if pd.isna(mean_0) or pd.isna(mean_2): continue
         
-        # Determine scoring direction
+        # Determine superior allele
         if is_lower_better:
             alt_is_superior = mean_2 < mean_0
         else:
@@ -282,14 +276,14 @@ def calculate_pyramiding_score_total(df_trait_env, trait):
     if not scores: return pd.DataFrame()
     score_df = pd.DataFrame(scores)
     
-    # 1. Aggregate Scores
+    # 1. Sum scores
     aggregated = score_df.groupby('SampleID')['Score'].sum().reset_index()
     aggregated.rename(columns={'Score': 'Total_Superior_Alleles'}, inplace=True)
     
-    # 2. Retrieve Phenotypes
+    # 2. Get phenotypic values
     pheno_subset = df_trait_env[['SampleID', 'Value']].drop_duplicates()
     
-    # 3. Pivot Haplotypes (Wide Format for Table)
+    # 3. Pivot specific haplotypes for the output table
     haplotypes_wide = df_trait_env.pivot_table(
         index='SampleID', 
         columns='SNP_Name', 
@@ -297,7 +291,7 @@ def calculate_pyramiding_score_total(df_trait_env, trait):
         aggfunc='first'
     ).reset_index()
     
-    # 4. Merge all data
+    # 4. Merge
     temp_df = pd.merge(aggregated, pheno_subset, on='SampleID', how='inner')
     final_df = pd.merge(temp_df, haplotypes_wide, on='SampleID', how='left')
     
@@ -308,7 +302,7 @@ def calculate_pyramiding_score_total(df_trait_env, trait):
 # ==========================================
 
 def plot_boxplot_only(df_plot, existing_snps, trait, env, save_dir, palette_dict):
-    """Generates comparative boxplots for haplotypes at each SNP."""
+    """Plot A: Comparative Boxplots with Significance."""
     n_snps = len(existing_snps)
     fig, axes = plt.subplots(1, n_snps, figsize=(2.0 * n_snps + 1, 5), sharey=True)
     if n_snps == 1: axes = [axes]
@@ -318,7 +312,7 @@ def plot_boxplot_only(df_plot, existing_snps, trait, env, save_dir, palette_dict
         ax = axes[i]
         snp_data = df_plot[df_plot['SNP_Name'] == snp].copy()
         
-        # Sort based on trait direction (Superior on left)
+        # Sort based on trait direction
         mean_vals = snp_data.groupby('Haplotype')['Value'].mean()
         is_lower_better = trait in CONFIG["LOWER_IS_BETTER_TRAITS"]
         
@@ -330,13 +324,12 @@ def plot_boxplot_only(df_plot, existing_snps, trait, env, save_dir, palette_dict
         hap_counts = snp_data['Haplotype'].value_counts()
         new_labels = [f"{h}\n(n={hap_counts[h]})" for h in sorted_haps]
         
-        # Plot
         sns.boxplot(x='Haplotype', y='Value', data=snp_data, order=sorted_haps, 
                     palette=palette_dict, showfliers=False, ax=ax, width=0.6)
         sns.stripplot(x='Haplotype', y='Value', data=snp_data, order=sorted_haps, 
                       color='black', alpha=0.3, size=3, ax=ax)
         
-        # T-test Significance
+        # Add T-test stars
         if len(sorted_haps) >= 2:
             d1 = snp_data[snp_data['Haplotype'] == sorted_haps[0]]['Value']
             d2 = snp_data[snp_data['Haplotype'] == sorted_haps[1]]['Value']
@@ -349,19 +342,17 @@ def plot_boxplot_only(df_plot, existing_snps, trait, env, save_dir, palette_dict
                 ax.text(0.5, 0.9, star, ha='center', va='center', 
                         transform=ax.transAxes, fontsize=12, fontweight='bold')
 
-        # Styling
         ax.set_xticklabels(new_labels, rotation=0, fontsize=9)
         ax.set_xlabel(snp, fontsize=11, fontweight='bold', rotation=45)
-        if i == 0: 
-            ax.set_ylabel(f"Phenotype ({trait})", fontsize=12)
+        if i == 0: ax.set_ylabel(f"Phenotype ({trait})", fontsize=12)
         else:
             ax.set_ylabel("")
             ax.tick_params(left=False)
             ax.grid(False, axis='y')
 
-    plt.suptitle(f"{trait} | {env} (Distribution)", fontsize=14, y=0.98)
+    plt.suptitle(f"{trait} | {env} (Haplotype Comparison)", fontsize=14, y=0.98)
     
-    # Add Legend to the right
+    # Legend
     legend_elements = [Patch(facecolor=color, edgecolor='black', label=hap) 
                        for hap, color in palette_dict.items()]
     axes[-1].legend(handles=legend_elements, title="Haplotype", 
@@ -371,7 +362,7 @@ def plot_boxplot_only(df_plot, existing_snps, trait, env, save_dir, palette_dict
     plt.close()
 
 def plot_regression_single(df_plot, existing_snps, trait, env, save_dir):
-    """Generates single SNP regression plots (0 vs 1)."""
+    """Plot B: Single Locus Additive Effect."""
     n_snps = len(existing_snps)
     fig, axes = plt.subplots(1, n_snps, figsize=(2.0 * n_snps + 1, 5), sharey=True)
     if n_snps == 1: axes = [axes]
@@ -381,16 +372,12 @@ def plot_regression_single(df_plot, existing_snps, trait, env, save_dir):
         ax = axes[i]
         snp_data = df_plot[df_plot['SNP_Name'] == snp].copy()
         valid_reg = snp_data.dropna(subset=['Allele_Count', 'Value'])
-        
-        # Calculate standardized Superior Allele Count (0 or 1)
         valid_reg['Superior_Count'] = calculate_superior_allele_count_single(valid_reg, trait)
         
-        # Scatter with jitter
         jitter = np.random.normal(0, 0.03, size=len(valid_reg))
         ax.scatter(valid_reg['Superior_Count'] + jitter, valid_reg['Value'], 
                    color='gray', alpha=0.5, s=15)
         
-        # Regression Line
         if len(valid_reg['Superior_Count'].unique()) > 1:
             slope, intercept, r_value, p_value, std_err = stats.linregress(
                 valid_reg['Superior_Count'], valid_reg['Value'])
@@ -398,7 +385,7 @@ def plot_regression_single(df_plot, existing_snps, trait, env, save_dir):
             y_vals = intercept + slope * x_vals
             ax.plot(x_vals, y_vals, color='red', linewidth=2, linestyle='--')
             
-            # Stats Text (Placed above the plot area)
+            # Stats (Top of Plot)
             reg_text = f"$R^2$={r_value**2:.2f}\n$P$={p_value:.1e}"
             ax.text(0.5, 1.02, reg_text, ha='center', va='bottom', transform=ax.transAxes, 
                     fontsize=9, color='darkred', fontweight='bold')
@@ -408,30 +395,27 @@ def plot_regression_single(df_plot, existing_snps, trait, env, save_dir):
         ax.set_xlabel(snp, fontsize=11, fontweight='bold', rotation=45)
         ax.set_xticks([0, 1])
         ax.set_xlim(-0.3, 1.3)
-        if i == 0: 
-            ax.set_ylabel(f"Phenotype ({trait})", fontsize=12)
+        if i == 0: ax.set_ylabel(f"Phenotype ({trait})", fontsize=12)
         else:
             ax.set_ylabel("")
             ax.tick_params(left=False)
             
-    plt.suptitle(f"{trait} | {env} (Single SNP Effect)", fontsize=14, y=1.1)
+    plt.suptitle(f"{trait} | {env} (Single Locus Effect)", fontsize=14, y=1.1)
     save_plot_dual_formats(f"{trait}_{env}_2_Reg_Single", save_dir)
     plt.close()
 
 def plot_regression_pyramiding(agg_df, trait, env, save_dir):
-    """Generates the pyramiding effect regression plot (0-5)."""
+    """Plot C: Cumulative Pyramiding Effect."""
     df_plot = agg_df.dropna(subset=['Total_Superior_Alleles', 'Value'])
     if df_plot.empty: return
 
     plt.figure(figsize=(6, 6))
     ax = plt.gca()
     
-    # Scatter
     jitter = np.random.normal(0, 0.1, size=len(df_plot))
     ax.scatter(df_plot['Total_Superior_Alleles'] + jitter, df_plot['Value'], 
                color='#4c72b0', alpha=0.6, s=20, edgecolor='white', linewidth=0.5)
     
-    # Regression Line
     if len(df_plot['Total_Superior_Alleles'].unique()) > 1:
         slope, intercept, r_value, p_value, std_err = stats.linregress(
             df_plot['Total_Superior_Alleles'], df_plot['Value'])
@@ -441,7 +425,7 @@ def plot_regression_pyramiding(agg_df, trait, env, save_dir):
         y_vals = intercept + slope * x_vals
         ax.plot(x_vals, y_vals, color='#c44e52', linewidth=2.5, linestyle='-')
         
-        # Stats Text (Placed above the plot area)
+        # Stats (Outside Top)
         stats_text = f"$R^2$ = {r_value**2:.2f}, $P$ = {p_value:.1e}"
         ax.text(0.5, 1.02, stats_text, ha='center', va='bottom', transform=ax.transAxes,
                 fontsize=12, fontweight='bold', color='black')
@@ -449,10 +433,7 @@ def plot_regression_pyramiding(agg_df, trait, env, save_dir):
     ax.set_title(f"{trait} | {env}\nPyramiding Effect", fontsize=14, y=1.08)
     ax.set_xlabel("Number of Superior Alleles", fontsize=12)
     ax.set_ylabel(f"Phenotype ({trait})", fontsize=12)
-    
-    # Set X-axis ticks to integers only (0-5)
-    max_val = int(df_plot['Total_Superior_Alleles'].max())
-    ax.set_xticks(range(0, max_val + 2)) 
+    ax.set_xticks(range(0, 7)) # Ensure integers on X axis
     ax.grid(True, linestyle='--', alpha=0.3)
     
     plt.tight_layout()
@@ -460,63 +441,58 @@ def plot_regression_pyramiding(agg_df, trait, env, save_dir):
     plt.close()
 
 # ==========================================
-#           Main Execution Flow
+#           Main Execution
 # ==========================================
 
 def main():
-    # Setup Output Directory
-    if not os.path.exists(CONFIG["OUTPUT_DIR"]): 
-        os.makedirs(CONFIG["OUTPUT_DIR"])
+    if not os.path.exists(CONFIG["OUTPUT_DIR"]): os.makedirs(CONFIG["OUTPUT_DIR"])
     
-    # 1. Load Data
+    print("[INFO] Step 1: Loading Data...")
     pheno_raw = load_phenotype(CONFIG["PHENOTYPE_FILE"])
     if pheno_raw is None: return
     
     pheno_long = reshape_phenotype(pheno_raw, CONFIG["TRAIT_GROUPS"], CONFIG["ENV_LIST"])
     
-    print("[INFO] Extracting SNP genotypes from VCFs...")
+    print("[INFO] Step 2: Extracting SNP Genotypes...")
     geno_long = get_snp_data_from_vcfs(CONFIG["VCF_FOLDER"], CONFIG["TARGET_SNPS"])
     
     if geno_long.empty or pheno_long.empty:
-        print("[ERROR] Data extraction failed. Check paths or VCF content.")
+        print("[ERROR] Data extraction failed. Please check your VCFs and Phenotype file.")
         return
 
-    # 2. Merge Genotype and Phenotype
     merged_df = pd.merge(geno_long, pheno_long, on='SampleID', how='inner')
     
-    print("[INFO] Starting batch analysis...")
+    print("[INFO] Step 3: Starting Analysis Pipeline...")
     
     for trait in CONFIG["TRAIT_GROUPS"]:
-        # Create directories
+        # Directory setup
         trait_dir = os.path.join(CONFIG["OUTPUT_DIR"], trait)
         tables_dir = os.path.join(trait_dir, "Tables")
         if not os.path.exists(trait_dir): os.makedirs(trait_dir)
         if not os.path.exists(tables_dir): os.makedirs(tables_dir)
         
         for env in CONFIG["ENV_LIST"]:
-            # Filter Data
             subset = merged_df[(merged_df['Trait_Type'] == trait) & 
                                (merged_df['Environment'] == env)].copy()
             subset = subset.dropna(subset=['Value'])
             if subset.empty: continue
             
+            # Ensure proper SNP ordering for plots
             snp_order = list(CONFIG["TARGET_SNPS"].keys())
             existing_snps = [s for s in snp_order if s in subset['SNP_Name'].unique()]
             if not existing_snps: continue
             
-            print(f"Processing: {trait} - {env}")
+            print(f"   Processing: {trait} - {env}")
 
-            # --- A. Save Single SNP Data Table ---
-            table_single_name = f"{trait}_{env}_SingleSNP_Data.csv"
+            # --- A. Save Single SNP Table ---
             subset[['SampleID', 'SNP_Name', 'Haplotype', 'Allele_Count', 'Value']]\
                 .sort_values(['SNP_Name', 'SampleID'])\
-                .to_csv(os.path.join(tables_dir, table_single_name), index=False)
+                .to_csv(os.path.join(tables_dir, f"{trait}_{env}_SingleSNP_Data.csv"), index=False)
             
             # --- B. Plot 1: Boxplots ---
             all_haps = sorted(subset['Haplotype'].dropna().unique())
             base_palette = sns.color_palette("Set2", n_colors=len(all_haps))
             palette_dict = dict(zip(all_haps, base_palette))
-            
             plot_boxplot_only(subset, existing_snps, trait, env, trait_dir, palette_dict)
             
             # --- C. Plot 2: Single Regression ---
@@ -525,21 +501,19 @@ def main():
             # --- D. Pyramiding Analysis ---
             agg_df = calculate_pyramiding_score_total(subset, trait)
             if not agg_df.empty:
-                # Save Pyramiding Data Table
+                # Save Table with Haplotypes
                 cols = ['SampleID', 'Total_Superior_Alleles', 'Value']
                 snp_cols = [c for c in agg_df.columns if c not in cols]
                 ordered_snp_cols = [s for s in snp_order if s in snp_cols]
-                
                 final_cols = cols + ordered_snp_cols
-                agg_df_sorted = agg_df[final_cols].sort_values('SampleID')
                 
-                table_pyramiding_name = f"{trait}_{env}_Pyramiding_Data.csv"
-                agg_df_sorted.to_csv(os.path.join(tables_dir, table_pyramiding_name), index=False)
+                agg_df[final_cols].sort_values('SampleID')\
+                    .to_csv(os.path.join(tables_dir, f"{trait}_{env}_Pyramiding_Data.csv"), index=False)
 
                 # Plot 3: Pyramiding Regression
                 plot_regression_pyramiding(agg_df, trait, env, trait_dir)
             
-    print(f"\n[SUCCESS] Analysis complete. Results saved in: {CONFIG['OUTPUT_DIR']}")
+    print(f"\n[SUCCESS] All results saved to: {CONFIG['OUTPUT_DIR']}")
 
 if __name__ == '__main__':
     main()
