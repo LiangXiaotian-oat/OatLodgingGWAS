@@ -12,52 +12,45 @@ This repository contains the source code and analysis scripts for the research p
 
 ---
 
-## 📂 Code Organization & Analysis Pipeline
+## 📂 Repository Structure / 代码库结构
 
-All scripts are numbered according to the analysis workflow described in the manuscript. **Note:** All scripts include a built-in demo mode (`--demo` or synthetic data generation), allowing users to reproduce the pipeline without accessing the raw dataset.
+本项目的代码按照论文的分析流程进行编号和组织，涵盖了从表型统计、核心性状筛选、GWAS 分析到候选基因功能验证的全过程。
 
-### 📊 1. Phenotype Statistical Analysis
-* **`01_phenotype_stats.R`**
-    * Calculates descriptive statistics (Mean, SD, CV, Skewness, Kurtosis) for all traits across environments.
-    * Pre-processes raw data by averaging replicates.
-* **`02_correlation_visualization_PerformanceAnalytics.R`**
-    * Performs Pearson correlation analysis within single environments.
-    * Generates correlation matrices with significance levels and histograms using the `PerformanceAnalytics` package.
-* **`03_correlation_visualization_GGally.R`**
-    * Visualizes multi-environment trait correlations.
-    * Uses `GGally` to create pairwise plots colored by environment to assess trait stability.
-* **`05_normality_checks_visualization.R`**
-    * Performs Shapiro-Wilk normality tests.
-    * Generates high-resolution histograms with fitted normal distribution curves for quality control.
+The scripts are numbered and organized according to the analytical workflow presented in the manuscript, covering phenotype statistics, core trait screening, GWAS, and functional gene verification.
 
-### 🤖 2. Machine Learning & Heritability
-* **`04_xgboost_feature_importance.py`**
-    * **Key Script:** Implements the XGBoost regression model described in Section 2.3.2.
-    * Ranks phenotypic traits by their "Importance Score" (Gain) regarding Lodging Resistance.
-    * Includes logic for grouping features (e.g., Morphological vs. Mechanical traits).
-* **`06_Heritability_BLUP_Calculation.R`**
-    * Fits Linear Mixed Models (LMM) using `lme4`.
-    * Calculates Best Linear Unbiased Predictions (**BLUPs**) for GWAS input.
-    * Estimates Broad-sense Heritability ($H^2$) using variance components.
+| 编号 | 文件名 (File Name) | 描述 (Description) |
+| :--- | :--- | :--- |
+| **01** | `01_phenotype_stats.R` | 计算表型数据的描述性统计量（均值、标准差、CV、极值等）。<br>Calculates descriptive statistics (Mean, SD, CV, Range) for phenotypic data. |
+| **02** | `02_correlation_visualization_PerformanceAnalytics.R` | 使用 `PerformanceAnalytics` 包进行多环境表型相关性分析。<br>Analyzes phenotypic correlations across environments using `PerformanceAnalytics`. |
+| **03** | `03_correlation_visualization_GGally.R` | 使用 `GGally` 包绘制分环境的性状相关性矩阵和分布图。<br>Visualizes pairwise correlation matrices and distributions separated by environment using `GGally`. |
+| **04** | `04_xgboost_feature_importance.py` | 基于 Python `XGBoost` 模型计算各农艺性状对倒伏评分 (LS) 的特征重要性，用于筛选核心性状。<br>Calculates feature importance of agronomic traits contributing to LS using `XGBoost` for core trait screening. |
+| **05** | `05_normality_checks_visualization.R` | 绘制表型数据的频次分布直方图并拟合正态曲线，进行正态性检验。<br>Plots frequency distribution histograms with fitted normal curves for normality checks. |
+| **06** | `06_Heritability_BLUP_Calculation.R` | 基于混合线性模型 (LMM) 计算广义遗传力 ($H^2$) 和最佳线性无偏预测值 (BLUP)。<br>Estimates broad-sense heritability ($H^2$) and BLUP values using Linear Mixed Models (LMM). |
+| **07** | `07_gapit_gwas.R` | 调用 `GAPIT` 包中的 FarmCPU 模型进行多环境及 BLUP 值的全基因组关联分析。<br>Performs GWAS using the FarmCPU model in `GAPIT` package across environments and for BLUP values. |
+| **08** | `08_Manhattan_QQ_Plots.R` | 绘制单个环境及综合环境（BLUP）的曼哈顿图和 Q-Q 图。<br>Generates Manhattan and Q-Q plots for individual environments and BLUP values. |
+| **09** | `09_SNP_genotype_visualization.py` | 可视化 KASP 标记的分型结果（散点图）及基因结构图。<br>Visualizes KASP genotyping results (scatter plots) and gene structures. |
+| **10** | `10_haplotype_verification.py` | 绘制候选基因优异/非优异单倍型的表型差异箱线图（验证多效性）。<br>Plots boxplots showing phenotypic differences between haplotypes (verifying pleiotropic effects). |
+| **11** | `11_pyramiding_effect_analysis.py` | 分析优异等位基因累加数量与表型之间的线性回归关系（聚合效应）。<br>Analyzes the linear regression between the number of superior alleles and phenotypes (pyramiding effect). |
 
-### 🧬 3. Genome-Wide Association Study (GWAS)
-* **`07_gapit_gwas.R`**
-    * **Core Analysis:** Runs the GWAS pipeline using **GAPIT 3**.
-    * Implements **FarmCPU** and **BLINK** models as specified in Section 2.4.
-    * Handles synthetic HapMap genotype data generation for demonstration.
-* **`08_Manhattan_QQ_Plots.R`**
-    * Visualizes GWAS results using `CMplot`.
-    * Generates publication-quality Rectangular and Circular Manhattan plots.
-
-### 🔬 4. Candidate Gene & Haplotype Analysis
-* **`09_SNP_genotype_visualization.py`**
-    * Visualizes genotype frequency distributions for specific SNPs.
-    * Generates stacked bar charts to inspect allele counts.
-* **`10_haplotype_verification.py`**
-    * **Validation Script:** Performs the haplotype analysis described in Section 2.5.2.
-    * Parses VCF files to identify haplotype blocks.
-    * Conducts **ANOVA** and **Tukey’s HSD test** to verify phenotypic differences between haplotypes.
 ---
+
+### 🛠️ Dependencies / 依赖库
+
+请确保安装了以下 R 包和 Python 库以运行上述代码：
+Please ensure the following dependencies are installed:
+
+#### R Requirements:
+- `GAPIT` (for GWAS)
+- `lme4` (for BLUP/Heritability)
+- `PerformanceAnalytics`, `GGally` (for Correlation)
+- `ggplot2`, `CMplot` (for Visualization)
+- `tidyverse`, `data.table` (Data manipulation)
+
+#### Python Requirements:
+- `pandas`, `numpy` (Data processing)
+- `scikit-learn`, `xgboost` (Machine Learning)
+- `matplotlib`, `seaborn` (Visualization)
+- `scipy`, `statsmodels` (Statistical testing)
 
 ## 📝 Data Availability
 
