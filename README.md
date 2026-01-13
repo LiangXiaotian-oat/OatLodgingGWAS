@@ -27,8 +27,7 @@ The scripts are numbered and organized according to the analytical workflow pres
 | **07** | `07_gapit_gwas.R` | <br>Performs GWAS using the FarmCPU model in `GAPIT` package across environments and for BLUP values. |
 | **08** | `08_Manhattan_QQ_Plots.R` | <br>Generates Manhattan and Q-Q plots for individual environments and BLUP values. |
 | **09** | `09_SNP_genotype_visualization.py` | <br>Visualizes KASP genotyping results (scatter plots) and gene structures. |
-| **10** | `10_haplotype_verification.py` | <br>Plots boxplots showing phenotypic differences between haplotypes (verifying pleiotropic effects). |
-| **11** | `11_pyramiding_effect_analysis.py` | <br>Analyzes the linear regression between the number of superior alleles and phenotypes (pyramiding effect). |
+| **10** | `10_haplotype_verification.py` | <br>1. Combined boxplots for single SNP effects across all traits. 2. Pyramiding effect analysis with regression lines (validating additive genetic effects). |
 
 ---
 
